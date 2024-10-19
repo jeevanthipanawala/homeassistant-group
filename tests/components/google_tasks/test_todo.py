@@ -1,21 +1,16 @@
 """Tests for Google Tasks todo platform."""
 
 from collections.abc import Awaitable, Callable
-from datetime import date, timedelta
 from http import HTTPStatus
 import json
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from httplib2 import Response
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
-from homeassistant.components.google_tasks.todo import (
-    GoogleTaskTodoListEntity,
-    TodoItem,
-)
-from homeassistant.components.input_text import DOMAIN as INPUT_TEXT_DOMAIN
+from homeassistant.components.google_tasks.todo import GoogleTaskTodoListEntity
 from homeassistant.components.todo import (
     ATTR_DESCRIPTION,
     ATTR_DUE_DATE,
@@ -23,15 +18,11 @@ from homeassistant.components.todo import (
     ATTR_RENAME,
     ATTR_STATUS,
     DOMAIN as TODO_DOMAIN,
-    TodoItemStatus,
     TodoServices,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from tests.typing import WebSocketGenerator
 
