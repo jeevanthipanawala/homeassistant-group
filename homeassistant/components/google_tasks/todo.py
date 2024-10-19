@@ -6,6 +6,8 @@ from datetime import date, datetime, timedelta
 import logging
 from typing import Any, cast
 
+from dateutil.parser import isoparse
+
 from homeassistant.components.todo import (
     TodoItem,
     TodoItemStatus,
@@ -138,6 +140,9 @@ class GoogleTaskTodoListEntity(
             task=_convert_todo_item(item),
         )
         await self.coordinator.async_refresh()
+        await self._store_tasks_for_email(self.coordinator.data)
+        await self._store_weekly_tasks_for_email(self.coordinator.data)
+        await self._store_upcoming_tasks_for_email(self.coordinator.data)
 
     async def async_delete_todo_items(self, uids: list[str]) -> None:
         """Delete To-do items."""
@@ -150,6 +155,60 @@ class GoogleTaskTodoListEntity(
         """Re-order a To-do item."""
         await self.coordinator.api.move(self._task_list_id, uid, previous=previous_uid)
         await self.coordinator.async_refresh()
+
+    # Helper function to store tasks due today
+    async def _store_tasks_for_email(self, tasks: list[TodoItem]) -> None:
+        """Store tasks in an input_text helper for later email."""
+        categorized_tasks = self.categorize_tasks(tasks)
+        task_summaries = "This is the list of tasks due today:\n"
+        task_summaries += "\n".join(
+            [f"- {task['title']}" for task in categorized_tasks["Today"]]
+        )
+        # Store the task summaries as text in the input_text helper
+        await self.hass.services.async_call(
+            "input_text",
+            "set_value",
+            {
+                "entity_id": "input_text.stored_task_data",
+                "value": task_summaries,
+            },
+        )
+
+    # Helper function to store tasks due this week
+    async def _store_weekly_tasks_for_email(self, tasks: list[TodoItem]) -> None:
+        """Store tasks in an input_text helper for later email."""
+        categorized_tasks = self.categorize_tasks(tasks)
+        task_summaries = "This is the list of tasks due this week:\n"
+        task_summaries += "\n".join(
+            [f"- {task['title']}" for task in categorized_tasks["This Week"]]
+        )
+        # Store the task summaries as text in the input_text helper
+        await self.hass.services.async_call(
+            "input_text",
+            "set_value",
+            {
+                "entity_id": "input_text.stored_weekly_task_data",
+                "value": task_summaries,
+            },
+        )
+
+    # Helper function to store upcoming week's tasks
+    async def _store_upcoming_tasks_for_email(self, tasks: list[TodoItem]) -> None:
+        """Store tasks in an input_text helper for later email."""
+        categorized_tasks = self.categorize_tasks(tasks)
+        task_summaries = "This is the list of upcoming tasks in future weeks:\n"
+        task_summaries += "\n".join(
+            [f"- {task['title']}" for task in categorized_tasks["Upcoming"]]
+        )
+        # Store the task summaries as text in the input_text helper
+        await self.hass.services.async_call(
+            "input_text",
+            "set_value",
+            {
+                "entity_id": "input_text.stored_upcoming_task_data",
+                "value": task_summaries,
+            },
+        )
 
     # Categorize tasks by due date as "Today","This Week" and "Upcoming" and return the task list categorized
     def categorize_tasks(
@@ -170,36 +229,16 @@ class GoogleTaskTodoListEntity(
             due_date = None
             due_str = task.get("due")
             if due_str:
-                due_date = datetime.fromisoformat(due_str)
+                parsed_date = isoparse(due_str)
+                due_date = parsed_date.date()
             if due_date:
                 if due_date == current_date:
                     categorized_tasks["Today"].append(task)
-                elif week_start <= due_date <= week_end:
+                elif week_start <= due_date and due_date <= week_end:
                     categorized_tasks["This Week"].append(task)
                 elif due_date > week_end:
                     categorized_tasks["Upcoming"].append(task)
         return categorized_tasks
-
-    async def send_daily_email(
-        self, hass: HomeAssistant, tasks: list[dict[str, Any]], now: datetime
-    ):
-        """Send a daily email with the categorized tasks."""
-        categorized_tasks = self.categorize_tasks(tasks)
-        # Prepare the email content
-        email_subject = "Daily Task Reminder"
-        email_body = "Here are your tasks for today:\n\n"
-        for task in categorized_tasks["Today"]:
-            email_body += f" - {task['title']} (Due: {task['due']})\n"
-            email_body += "\n"
-
-        # Send the email using Home Assistant's notify service
-        try:
-            await self.hass.services.async_call(
-                "notify", "email", {"message": email_body, "title": email_subject}
-            )
-            _LOGGER.info("Email sent successfully with daily task reminders")
-        except Exception as e:  # noqa: BLE001
-            _LOGGER.error("Error sending email: %s", e)
 
 
 def _order_tasks(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
