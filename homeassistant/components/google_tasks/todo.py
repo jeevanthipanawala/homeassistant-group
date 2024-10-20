@@ -143,6 +143,7 @@ class GoogleTaskTodoListEntity(
         await self._store_tasks_for_email(self.coordinator.data)
         await self._store_weekly_tasks_for_email(self.coordinator.data)
         await self._store_upcoming_tasks_for_email(self.coordinator.data)
+        await self._store_overdue_tasks_for_email(self.coordinator.data)
 
     async def async_delete_todo_items(self, uids: list[str]) -> None:
         """Delete To-do items."""
@@ -210,6 +211,24 @@ class GoogleTaskTodoListEntity(
             },
         )
 
+    # Helper function to store overdue tasks
+    async def _store_overdue_tasks_for_email(self, tasks: list[TodoItem]) -> None:
+        """Store tasks in an input_text helper for later email."""
+        categorized_tasks = self.categorize_tasks(tasks)
+        task_summaries = "This is the list of overdue tasks which need your action:\n"
+        task_summaries += "\n".join(
+            [f"- {task['title']}" for task in categorized_tasks["Overdue"]]
+        )
+        # Store the task summaries as text in the input_text helper
+        await self.hass.services.async_call(
+            "input_text",
+            "set_value",
+            {
+                "entity_id": "input_text.stored_overdue_task_data",
+                "value": task_summaries,
+            },
+        )
+
     # Categorize tasks by due date as "Today","This Week" and "Upcoming" and return the task list categorized
     def categorize_tasks(
         self, tasks: list[dict[str, Any]]
@@ -224,10 +243,12 @@ class GoogleTaskTodoListEntity(
             "Today": [],
             "This Week": [],
             "Upcoming": [],
+            "Overdue": [],
         }
         for task in tasks:
             due_date = None
             due_str = task.get("due")
+            task_status = task.get("status")
             if due_str:
                 parsed_date = isoparse(due_str)
                 due_date = parsed_date.date()
@@ -238,6 +259,8 @@ class GoogleTaskTodoListEntity(
                     categorized_tasks["This Week"].append(task)
                 elif due_date > week_end:
                     categorized_tasks["Upcoming"].append(task)
+                elif due_date < week_start and task_status == "needsAction":
+                    categorized_tasks["Overdue"].append(task)
         return categorized_tasks
 
 

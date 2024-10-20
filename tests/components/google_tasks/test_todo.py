@@ -4,12 +4,13 @@ from collections.abc import Awaitable, Callable
 from http import HTTPStatus
 import json
 from typing import Any
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from httplib2 import Response
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
+from homeassistant.components.google_tasks.todo import GoogleTaskTodoListEntity
 from homeassistant.components.todo import (
     ATTR_DESCRIPTION,
     ATTR_DUE_DATE,
@@ -147,6 +148,43 @@ async def ws_get_items(
         return resp.get("result", {}).get("items", [])
 
     return get
+
+
+@pytest.mark.asyncio
+async def test_store_tasks_for_email(hass: HomeAssistant):
+    # Create mock tasks data
+    tasks = [
+        {"title": "Task 1", "due": "2024-10-19T12:00:00Z"},
+        {"title": "Task 2", "due": "2024-10-19T15:00:00Z"},
+        {"title": "Task 3", "due": "2024-10-22T12:00:00Z"},
+        {"title": "Task 4", "due": "2024-11-01T12:00:00Z"},
+    ]
+
+    # Create the GoogleTaskTodoListEntity instance
+    entity = GoogleTaskTodoListEntity(
+        coordinator=MagicMock(),
+        name="Test Task List",
+        config_entry_id="config_id",
+        task_list_id="task_list_id",
+    )
+    entity.hass = hass
+    # Mock the categorize_tasks method
+    entity.categorize_tasks = MagicMock(
+        return_value={"Today": tasks, "This Week": [], "Upcoming": []}
+    )
+
+    # Call the method to test
+    await entity._store_tasks_for_email(tasks)
+
+    # Check that the services.async_call was called with the correct parameters
+    hass.services.async_call.assert_called_once_with(
+        "input_text",
+        "set_value",
+        {
+            "entity_id": "input_text.stored_task_data",
+            "value": "This is the list of tasks due today:\n- Task 1\n- Task 2",
+        },
+    )
 
 
 @pytest.fixture(name="api_responses")
