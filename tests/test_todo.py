@@ -7,8 +7,7 @@ from dateutil.parser import isoparse
 @pytest.fixture
 def google_task_entity():
     """Fixture to create an instance of the GoogleTaskTodoListEntity class."""
-    # Mocking the coordinator and initialization data
-    mock_coordinator = None  # Replace with a mock if you need one
+    mock_coordinator = None
     google_task_entity = GoogleTaskTodoListEntity(
         coordinator=mock_coordinator,
         name="Test List",
