@@ -141,9 +141,6 @@ class GoogleTaskTodoListEntity(
         )
         await self.coordinator.async_refresh()
         await self._store_tasks_for_email(self.coordinator.data)
-        await self._store_weekly_tasks_for_email(self.coordinator.data)
-        await self._store_upcoming_tasks_for_email(self.coordinator.data)
-        await self._store_overdue_tasks_for_email(self.coordinator.data)
 
     async def async_delete_todo_items(self, uids: list[str]) -> None:
         """Delete To-do items."""
@@ -161,71 +158,53 @@ class GoogleTaskTodoListEntity(
     async def _store_tasks_for_email(self, tasks: list[TodoItem]) -> None:
         """Store tasks in an input_text helper for later email."""
         categorized_tasks = self.categorize_tasks(tasks)
-        task_summaries = "This is the list of tasks due today:\n"
-        task_summaries += "\n".join(
+        task_summaries_today = "This is the list of tasks due today:\n"
+        task_summaries_today += "\n".join(
             [f"- {task['title']}" for task in categorized_tasks["Today"]]
         )
-        # Store the task summaries as text in the input_text helper
-        await self.hass.services.async_call(
-            "input_text",
-            "set_value",
-            {
-                "entity_id": "input_text.stored_task_data",
-                "value": task_summaries,
-            },
-        )
-
-    # Helper function to store tasks due this week
-    async def _store_weekly_tasks_for_email(self, tasks: list[TodoItem]) -> None:
-        """Store tasks in an input_text helper for later email."""
-        categorized_tasks = self.categorize_tasks(tasks)
-        task_summaries = "This is the list of tasks due this week:\n"
-        task_summaries += "\n".join(
+        task_summaries_thisweek = "This is the list of tasks due this week:\n"
+        task_summaries_thisweek += "\n".join(
             [f"- {task['title']}" for task in categorized_tasks["This Week"]]
         )
-        # Store the task summaries as text in the input_text helper
-        await self.hass.services.async_call(
-            "input_text",
-            "set_value",
-            {
-                "entity_id": "input_text.stored_weekly_task_data",
-                "value": task_summaries,
-            },
+        task_summaries_upcoming = (
+            "This is the list of upcoming tasks in future weeks:\n"
         )
-
-    # Helper function to store upcoming week's tasks
-    async def _store_upcoming_tasks_for_email(self, tasks: list[TodoItem]) -> None:
-        """Store tasks in an input_text helper for later email."""
-        categorized_tasks = self.categorize_tasks(tasks)
-        task_summaries = "This is the list of upcoming tasks in future weeks:\n"
-        task_summaries += "\n".join(
+        task_summaries_upcoming += "\n".join(
             [f"- {task['title']}" for task in categorized_tasks["Upcoming"]]
         )
-        # Store the task summaries as text in the input_text helper
-        await self.hass.services.async_call(
-            "input_text",
-            "set_value",
-            {
-                "entity_id": "input_text.stored_upcoming_task_data",
-                "value": task_summaries,
-            },
-        )
 
-    # Helper function to store overdue tasks
-    async def _store_overdue_tasks_for_email(self, tasks: list[TodoItem]) -> None:
-        """Store tasks in an input_text helper for later email."""
-        categorized_tasks = self.categorize_tasks(tasks)
-        task_summaries = "This is the list of overdue tasks which need your action:\n"
-        task_summaries += "\n".join(
+        task_summaries_overdue = (
+            "This is the list of overdue tasks which need your action:\n"
+        )
+        task_summaries_overdue += "\n".join(
             [f"- {task['title']}" for task in categorized_tasks["Overdue"]]
         )
-        # Store the task summaries as text in the input_text helper
+
+        # Store the task summaries as text in the input_text helpers
+        if len(categorized_tasks["Today"]) > 0:
+            await self._write_task_summaries(
+                task_summaries_today, "input_text.stored_task_data"
+            )
+        if len(categorized_tasks["This Week"]) > 0:
+            await self._write_task_summaries(
+                task_summaries_thisweek, "input_text.stored_weekly_task_data"
+            )
+        if len(categorized_tasks["Upcoming"]) > 0:
+            await self._write_task_summaries(
+                task_summaries_upcoming, "input_text.stored_upcoming_task_data"
+            )
+        if len(categorized_tasks["Overdue"]) > 0:
+            await self._write_task_summaries(
+                task_summaries_overdue, "input_text.stored_overdue_task_data"
+            )
+
+    async def _write_task_summaries(self, text_value: str, input_text_id: str):
         await self.hass.services.async_call(
             "input_text",
             "set_value",
             {
-                "entity_id": "input_text.stored_overdue_task_data",
-                "value": task_summaries,
+                "entity_id": input_text_id,
+                "value": text_value,
             },
         )
 
